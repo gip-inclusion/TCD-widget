@@ -21,6 +21,10 @@ function updateFullscreenTable() {
   if ($pivotTableInUI.length) {
     const $clonedTable = $pivotTableInUI.clone(true, true);
     $fullscreenContainer.append($clonedTable);
+    
+    // Appliquer les couleurs au tableau cloné
+    applyVariableColors();
+    
   } else {
     // Si nous sommes en mode plein écran mais que la table n'est pas encore prête,
     // afficher un message de chargement au lieu d'un message d'erreur
@@ -128,6 +132,12 @@ grist.onRecords(async rec => {
       onRefresh(config) {
         if (firstRefresh) { 
           firstRefresh = false; 
+          
+          // Appliquer les couleurs lors de la première initialisation
+          setTimeout(() => {
+            applyVariableColors();
+          }, 150);
+          
           return; 
         }
         currentPivotConfig = {
@@ -145,6 +155,8 @@ grist.onRecords(async rec => {
         if (currentViewMode === 'fullscreen') {
           updateFullscreenTable();
         }
+        // Réappliquer les couleurs après modification
+        applyVariableColors();
       },
 
       aggregatorName: currentPivotConfig.aggregatorName,
@@ -156,6 +168,11 @@ grist.onRecords(async rec => {
 
   // Créer de manière dynamique les Labels "colonnes" "lignes" "Valeurs"
   PivotLabels.init(); 
+
+  // Appliquer les couleurs après l'initialisation complète
+  setTimeout(() => {
+    applyVariableColors();
+  }, 200);
   
   try {
     const savedViewMode = await grist.getOption('viewMode');
@@ -193,10 +210,51 @@ $(document).ready(function() {
   // Gestionnaire pour le bouton "Quitter plein écran"
   $('#fullscreen-exit-button').on('click', function() {
     currentViewMode = 'pivot';
-    $('#view-mode-select').val('pivot'); // Synchroniser le dropdown original
+    $('#view-mode-select').val('pivot');
     grist.setOption('viewMode', currentViewMode).catch(err => {
         console.error("Failed to save viewMode:", err);
     });
     applyViewMode();
   });
+
+  // ===== 6. NOUVEAU : Observer pour réappliquer les couleurs automatiquement =====
+  // Observer les mutations DOM pour réappliquer les couleurs quand nécessaire
+  const observer = new MutationObserver(function(mutations) {
+    let shouldReapplyColors = false;
+    
+    mutations.forEach(function(mutation) {
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        // Vérifier si des éléments .pvtAttr ont été ajoutés
+        mutation.addedNodes.forEach(function(node) {
+          if (node.nodeType === 1) { // Element node
+            if ($(node).find('.pvtAttr').length > 0 || $(node).hasClass('pvtAttr')) {
+              shouldReapplyColors = true;
+            }
+          }
+        });
+      }
+    });
+    
+    if (shouldReapplyColors) {
+      applyVariableColors();
+    }
+  });
+  
+  // Observer les changements dans les containers de pivot
+  const targetNode = document.getElementById('table');
+  if (targetNode) {
+    observer.observe(targetNode, { 
+      childList: true, 
+      subtree: true 
+    });
+  }
+  
+  const fullscreenNode = document.getElementById('fullscreen-table-container');
+  if (fullscreenNode) {
+    observer.observe(fullscreenNode, { 
+      childList: true, 
+      subtree: true 
+    });
+  }
+  
 });
