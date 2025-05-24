@@ -109,6 +109,20 @@ grist.onRecords(async rec => {
   let settings = await grist.getOption('settings') ?? {};
   let { rows, cols, vals, aggregatorName, rendererName } = settings;
 
+  // // Récupération de la taille des colonnes sauvegardée
+  try {
+  const savedColumnSize = await grist.getOption('columnSize');
+  if (savedColumnSize) {
+    $('#column-size-select').val(savedColumnSize);
+    changeColumnSize(savedColumnSize);
+  } else {
+    changeColumnSize('1.0');
+  }
+} catch (e) {
+  console.error("Error loading columnSize from Grist options:", e);
+  changeColumnSize('1.0');
+}
+
   // Stockage centralisé de la config pour facilité de mise à jour
   currentPivotConfig = { rows, cols, vals, aggregatorName, rendererName };
 
@@ -217,7 +231,32 @@ $(document).ready(function() {
     applyViewMode();
   });
 
-  // ===== 6. NOUVEAU : Observer pour réappliquer les couleurs automatiquement =====
+  // Gestionnaire pour la taille des colonnes
+  $('#column-size-select').on('change', function() {
+    const selectedSize = $(this).val();
+    
+    // Sauvegarder dans Grist
+    grist.setOption('columnSize', selectedSize).catch(err => {
+      console.error("Failed to save columnSize:", err);
+    });
+    
+    // Appliquer la nouvelle taille
+    changeColumnSize(selectedSize);
+    
+    // Si on est en mode plein écran, mettre à jour le contenu
+    if (currentViewMode === 'fullscreen') {
+      setTimeout(() => {
+        updateFullscreenTable();
+      }, 100);
+    }
+    
+    // Réappliquer les couleurs après changement de taille
+    setTimeout(() => {
+      applyVariableColors();
+    }, 150);
+  });
+
+  // Observer pour réappliquer les couleurs automatiquement
   // Observer les mutations DOM pour réappliquer les couleurs quand nécessaire
   const observer = new MutationObserver(function(mutations) {
     let shouldReapplyColors = false;
